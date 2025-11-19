@@ -282,6 +282,76 @@ app.get('/api/ventas', async (req: Request, res: Response) => {
   }
 });
 
+// --- API PARA INGRESAR VENTA (RU02) Y PRODUCTOS ---
+
+// GET /api/productos (Para llenar el selector de análisis)
+app.get('/api/productos', async (req: Request, res: Response) => {
+  try {
+    // Obtenemos productos con el nombre de su categoría
+    const result = await pool.query(`
+      SELECT p.*, c.Nombre as CategoriaNombre 
+      FROM Productos p
+      LEFT JOIN Categorias c ON p.CategoriaID = c.CategoriaID
+      ORDER BY p.Descripcion ASC
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error al obtener productos:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// POST /api/ventas (CREAR VENTA - TRANSACCIÓN COMPLEJA)
+app.post('/api/ventas', async (req: Request, res: Response) => {
+  const { clienteId, usuarioId, items, total } = req.body;
+
+  // items es un array: [{ productoId: 1, cantidad: 1, precio: 150 }, ...]
+
+  if (!clienteId || !usuarioId || !items || items.length === 0) {
+    return res.status(400).json({ error: 'Faltan datos para la venta.' });
+  }
+
+  // Iniciamos un CLIENTE de conexión para la transacción (no usar 'pool' directo aquí)
+  const client = await pool.connect();
+
+  try {
+    // 1. INICIAR TRANSACCIÓN
+    await client.query('BEGIN');
+
+    // 2. INSERTAR LA VENTA (CABECERA)
+    const ventaRes = await client.query(
+      `INSERT INTO Ventas (ClienteID, UsuarioID, Total, DescuentoAplicado)
+       VALUES ($1, $2, $3, 0)
+       RETURNING VentaID`,
+      [clienteId, usuarioId, total]
+    );
+    const ventaId = ventaRes.rows[0].ventaid;
+
+    // 3. INSERTAR LOS DETALLES (PRODUCTOS)
+    for (const item of items) {
+      await client.query(
+        `INSERT INTO Venta_Detalle (VentaID, ProductoID, Cantidad, PrecioUnitario)
+         VALUES ($1, $2, $3, $4)`,
+        [ventaId, item.productoId, item.cantidad, item.precio]
+      );
+    }
+
+    // 4. CONFIRMAR TRANSACCIÓN (COMMIT)
+    await client.query('COMMIT');
+
+    res.status(201).json({ message: 'Venta registrada con éxito', ventaId });
+
+  } catch (error) {
+    // 5. SI ALGO FALLA, DESHACER TODO (ROLLBACK)
+    await client.query('ROLLBACK');
+    console.error('Error en transacción de venta:', error);
+    res.status(500).json({ error: 'Error al procesar la venta.' });
+  } finally {
+    // Liberar el cliente de conexión
+    client.release();
+  }
+});
+
 // 5. INICIAR EL SERVIDOR
 app.listen(port, () => {
   console.log(`Servidor backend corriendo en http://localhost:${port}`);

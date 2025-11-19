@@ -1,34 +1,45 @@
 import React, { useState } from 'react';
-import { GestionClientes } from './GestionClientes'; // Importamos el nuevo componente
+import { GestionClientes } from './GestionClientes';
 import { VerVentas } from './VerVentas';
+import { IngresarVenta } from './IngresarVenta'; 
 
 interface DashboardProps {
   nombreUsuario: string;
+  usuarioId: number; // ID necesario para registrar ventas
   onLogout: () => void;
 }
 
 // Definimos las vistas posibles
 type Vista = 'inicio' | 'clientes' | 'ventas' | 'reportes';
 
-export function DashboardRecepcion({ nombreUsuario, onLogout }: DashboardProps) {
+export function DashboardRecepcion({ nombreUsuario, usuarioId, onLogout }: DashboardProps) {
   // Estado para controlar la vista actual
   const [vistaActual, setVistaActual] = useState<Vista>('inicio');
 
-  // Función para renderizar la vista seleccionada
+  // Función para decidir qué componente mostrar
   const renderizarVista = () => {
     switch (vistaActual) {
       case 'clientes':
         return <GestionClientes />;
+      
       case 'ventas':
-        return <p>Módulo de Ventas (Próximamente)...</p>; // (RU02)
+        return (
+          <IngresarVenta 
+            usuarioId={usuarioId} 
+            onVentaTerminada={() => setVistaActual('reportes')} 
+          />
+        );
+
       case 'reportes':
-        return <VerVentas />; // (RU03)
+        return <VerVentas />;
+
       case 'inicio':
       default:
         return <p>Selecciona una opción del menú para comenzar.</p>;
     }
   };
 
+  // --- AQUÍ ESTABA EL PROBLEMA: FALTABA ESTE RETURN ---
   return (
     <div className="dashboard-container">
       <nav className="sidebar">

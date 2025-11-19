@@ -104,6 +104,7 @@ function App() {
         <DashboardRecepcion 
           nombreUsuario={usuarioLogueado.nombre} 
           onLogout={handleLogout} 
+          usuarioId={usuarioLogueado.id} 
         />
       )}
     </div>
