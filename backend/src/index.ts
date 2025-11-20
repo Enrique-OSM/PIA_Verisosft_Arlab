@@ -374,11 +374,13 @@ app.get('/api/productos', async (req: Request, res: Response) => {
     const params = [];
 
     if (search && typeof search === 'string') {
-      query += ` WHERE p.Descripcion ILIKE $1 OR p.Codigo ILIKE $1`;
+      // CAMBIO: Ahora solo filtramos por p.Codigo usando ILIKE (insensible a mayúsculas)
+      query += ` WHERE p.Codigo ILIKE $1`;
       params.push(`%${search}%`);
     }
 
-    query += ` ORDER BY p.Descripcion ASC`;
+    // Ordenamos por Código para que sea más fácil encontrarlo
+    query += ` ORDER BY p.Codigo ASC`;
 
     const result = await pool.query(query, params);
     res.json(result.rows);

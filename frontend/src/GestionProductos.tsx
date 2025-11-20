@@ -38,17 +38,19 @@ export function GestionProductos() {
       const resProd = await axios.get(`${API_BASE_URL}/api/productos?search=${searchTerm}`);
       setProductos(resProd.data);
 
-      // Cargamos categorías (solo una vez, pero aquí está bien para asegurar consistencia)
+      // Cargamos categorías
       const resCat = await axios.get(`${API_BASE_URL}/api/categorias`);
       setCategorias(resCat.data);
     } catch (error) {
-      alert('Error al cargar datos'+error);
+      alert('Error al cargar datos: ' + error);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // El useEffect se encarga de recargar cada vez que escribes en searchTerm
   useEffect(() => {
+    // Agregamos un pequeño "delay" opcional o simplemente llamamos directo
     fetchData();
   }, [searchTerm]);
 
@@ -66,7 +68,7 @@ export function GestionProductos() {
       closeForm();
       fetchData();
     } catch (error) {
-      alert('Error al guardar producto.'+error);
+      alert('Error al guardar producto: ' + error);
     }
   };
 
@@ -77,10 +79,11 @@ export function GestionProductos() {
         await axios.delete(`${API_BASE_URL}/api/productos/${id}`);
         fetchData();
       } catch (error) {
-        if (error === 409) {
-          alert(error); // Mensaje si ya tiene ventas
+        // CORRECCIÓN: Verificamos correctamente el error de Axios
+        if (axios.isAxiosError(error) && error.response?.status === 409) {
+            alert(error.response.data.error); // Mensaje: "Ya tiene ventas registradas"
         } else {
-          alert('Error al eliminar');
+            alert('Error al eliminar el producto.');
         }
       }
     }
@@ -101,13 +104,11 @@ export function GestionProductos() {
     setShowForm(false);
     setProdActual({});
   };
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        // Verificamos si el campo es 'categoriaid' O si es de tipo número
-        const isNumber = e.target.type === 'number' || e.target.name === 'categoriaid';
-        
-        const val = isNumber ? Number(e.target.value) : e.target.value;
-        
-        setProdActual({ ...prodActual, [e.target.name]: val });
+  
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const isNumber = e.target.type === 'number' || e.target.name === 'categoriaid';
+    const val = isNumber ? Number(e.target.value) : e.target.value;
+    setProdActual({ ...prodActual, [e.target.name]: val });
   };
 
   return (
@@ -118,7 +119,8 @@ export function GestionProductos() {
       <div className="toolbar">
         <input 
           type="text" 
-          placeholder="Buscar por código o descripción..." 
+          // CAMBIO: Placeholder actualizado
+          placeholder="Buscar por código..." 
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ width: '300px' }}
@@ -139,6 +141,9 @@ export function GestionProductos() {
             </tr>
           </thead>
           <tbody>
+            {productos.length === 0 && (
+                <tr><td colSpan={5}>No se encontraron productos.</td></tr>
+            )}
             {productos.map(p => (
               <tr key={p.productoid}>
                 <td>{p.codigo}</td>
@@ -178,7 +183,6 @@ export function GestionProductos() {
               <label>Precio:</label>
               <input type="number" name="precio" value={prodActual.precio || 0} onChange={handleChange} required step="0.01" />
 
-              {/* Campo Stock (opcional para análisis clínicos, pero lo pide RU11) */}
               <label>Stock (Opcional):</label>
               <input type="number" name="stock" value={prodActual.stock || 0} onChange={handleChange} />
 
