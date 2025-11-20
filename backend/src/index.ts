@@ -352,6 +352,187 @@ app.post('/api/ventas', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/categorias (Para llenar el select del formulario)
+app.get('/api/categorias', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM Categorias ORDER BY Nombre ASC');
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener categorías' });
+  }
+});
+
+// GET /api/productos (RU10 y RU14: Ver y Buscar Productos)
+// (Nota: Reemplaza el anterior si ya lo tenías, este incluye búsqueda)
+app.get('/api/productos', async (req: Request, res: Response) => {
+  const { search } = req.query;
+  try {
+    let query = `
+      SELECT p.*, c.Nombre as CategoriaNombre 
+      FROM Productos p
+      LEFT JOIN Categorias c ON p.CategoriaID = c.CategoriaID
+    `;
+    const params = [];
+
+    if (search && typeof search === 'string') {
+      query += ` WHERE p.Descripcion ILIKE $1 OR p.Codigo ILIKE $1`;
+      params.push(`%${search}%`);
+    }
+
+    query += ` ORDER BY p.Descripcion ASC`;
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// POST /api/productos (RU11: Crear Producto)
+app.post('/api/productos', async (req: Request, res: Response) => {
+  // CORRECCIÓN: Usamos 'categoriaid' en minúsculas para coincidir con el frontend
+  const { codigo, descripcion, precio, stock, categoriaid } = req.body; 
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO Productos (Codigo, Descripcion, Precio, Stock, CategoriaID)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [codigo, descripcion, precio, stock || 0, categoriaid]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al crear producto' });
+  }
+});
+
+// PUT /api/productos/:id (RU12: Modificar Producto)
+app.put('/api/productos/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  // CORRECCIÓN: Aquí también 'categoriaid' en minúsculas
+  const { codigo, descripcion, precio, stock, categoriaid } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE Productos 
+       SET Codigo=$1, Descripcion=$2, Precio=$3, Stock=$4, CategoriaID=$5
+       WHERE ProductoID=$6 RETURNING *`,
+      [codigo, descripcion, precio, stock, categoriaid, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado' });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al actualizar producto' });
+  }
+});
+
+// DELETE /api/productos/:id (RU13: Eliminar Producto)
+app.delete('/api/productos/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query('DELETE FROM Productos WHERE ProductoID = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado' });
+    res.json({ message: 'Producto eliminado' });
+  } catch (error) {
+    // Error código 23503 es Violación de Llave Foránea (si el producto ya se vendió)
+    if (error === '23503') {
+        return res.status(409).json({ error: 'No se puede eliminar: Este producto ya tiene ventas registradas.' });
+    }
+    res.status(500).json({ error: 'Error al eliminar producto' });
+  }
+});
+
+// GET /api/roles (Para llenar el select del formulario)
+app.get('/api/roles', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM Roles ORDER BY RolID ASC');
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener roles' });
+  }
+});
+
+// GET /api/usuarios (Listar usuarios sin mostrar contraseñas)
+app.get('/api/usuarios', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query(`
+      SELECT u.UsuarioID, u.Nombre, u.Email, u.RolID, u.Activo, r.Nombre as RolNombre
+      FROM Usuarios u
+      JOIN Roles r ON u.RolID = r.RolID
+      ORDER BY u.UsuarioID ASC
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// POST /api/usuarios (Crear Usuario con contraseña encriptada)
+app.post('/api/usuarios', async (req: Request, res: Response) => {
+  const { nombre, email, password, rolid } = req.body;
+
+  if (!password) return res.status(400).json({ error: 'La contraseña es obligatoria.' });
+
+  try {
+    // 1. Encriptar contraseña
+    const saltRounds = 10;
+    const hash = await bcrypt.hash(password, saltRounds);
+
+    // 2. Insertar
+    const result = await pool.query(
+      `INSERT INTO Usuarios (Nombre, Email, PasswordHash, RolID, Activo)
+       VALUES ($1, $2, $3, $4, true) RETURNING UsuarioID, Nombre, Email, RolID, Activo`,
+      [nombre, email, hash, rolid]
+    );
+    res.status(201).json(result.rows[0]);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al crear usuario' });
+  }
+});
+
+// PUT /api/usuarios/:id (Editar Usuario y/o cambiar contraseña)
+app.put('/api/usuarios/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { nombre, email, password, rolid, activo } = req.body;
+
+  try {
+    let query = '';
+    let params = [];
+
+    if (password && password.trim() !== '') {
+      // CASO 1: El usuario quiere cambiar la contraseña (se debe hashear de nuevo)
+      const hash = await bcrypt.hash(password, 10);
+      query = `
+        UPDATE Usuarios 
+        SET Nombre=$1, Email=$2, RolID=$3, Activo=$4, PasswordHash=$5
+        WHERE UsuarioID=$6 RETURNING UsuarioID, Nombre, Email, RolID, Activo`;
+      params = [nombre, email, rolid, activo, hash, id];
+    } else {
+      // CASO 2: Solo actualizar datos, mantener contraseña vieja
+      query = `
+        UPDATE Usuarios 
+        SET Nombre=$1, Email=$2, RolID=$3, Activo=$4
+        WHERE UsuarioID=$5 RETURNING UsuarioID, Nombre, Email, RolID, Activo`;
+      params = [nombre, email, rolid, activo, id];
+    }
+
+    const result = await pool.query(query, params);
+    
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json(result.rows[0]);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al actualizar usuario' });
+  }
+});
 // 5. INICIAR EL SERVIDOR
 app.listen(port, () => {
   console.log(`Servidor backend corriendo en http://localhost:${port}`);
