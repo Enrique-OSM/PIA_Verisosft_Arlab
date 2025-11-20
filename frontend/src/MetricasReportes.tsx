@@ -4,9 +4,9 @@ import axios from 'axios';
 const API_BASE_URL = 'http://localhost:3001';
 
 interface Kpis {
-  totalventas: number; // Postgres devuelve minúsculas
-  ingresostotales: number;
-  totalclientes: number;
+  totalVentas: number; // Postgres devuelve minúsculas
+  ingresosTotales: number;
+  totalClientes: number;
 }
 
 interface TopProducto {
@@ -65,19 +65,19 @@ export function MetricasReportes() {
         <div className="card" style={{ flex: 1, textAlign: 'center', background: '#e3f2fd' }}>
           <h3>Ingresos Totales</h3>
           <p style={{ fontSize: '2em', fontWeight: 'bold', margin: '10px 0' }}>
-            {kpis ? money(kpis.ingresostotales) : '$0.00'}
+            {kpis ? money(kpis.ingresosTotales) : '$0.00'}
           </p>
         </div>
         <div className="card" style={{ flex: 1, textAlign: 'center', background: '#e8f5e9' }}>
           <h3>Ventas Realizadas</h3>
           <p style={{ fontSize: '2em', fontWeight: 'bold', margin: '10px 0' }}>
-            {kpis?.totalventas || 0}
+            {kpis?.totalVentas || 0}
           </p>
         </div>
         <div className="card" style={{ flex: 1, textAlign: 'center', background: '#fff3e0' }}>
           <h3>Pacientes Registrados</h3>
           <p style={{ fontSize: '2em', fontWeight: 'bold', margin: '10px 0' }}>
-            {kpis?.totalclientes || 0}
+            {kpis?.totalClientes || 0}
           </p>
         </div>
       </div>

@@ -223,14 +223,13 @@ app.delete('/api/clientes/:id', async (req: Request, res: Response) => {
 
 // GET /api/ventas (RU03: Ver Ventas con filtros)
 app.get('/api/ventas', async (req: Request, res: Response) => {
-  // Obtenemos los parámetros de filtro de la URL
   const { searchCliente, fechaInicio, fechaFin } = req.query;
 
   try {
     const params = [];
     const whereClauses = [];
 
-    // Consulta base que une las 3 tablas
+    // Consultamos Venta, Cliente, Usuario Y agregamos un JSON con los detalles
     let query = `
       SELECT 
         v.VentaID, 
@@ -238,41 +237,40 @@ app.get('/api/ventas', async (req: Request, res: Response) => {
         c.Nombre AS ClienteNombre, 
         u.Nombre AS UsuarioNombre, 
         v.Total,
-        v.DescuentoAplicado
+        v.DescuentoAplicado,
+        json_agg(json_build_object(
+          'producto', p.Descripcion,
+          'cantidad', vd.Cantidad,
+          'precio', vd.PrecioUnitario
+        )) AS detalles
       FROM Ventas v
       JOIN Clientes c ON v.ClienteID = c.ClienteID
       JOIN Usuarios u ON v.UsuarioID = u.UsuarioID
+      LEFT JOIN Venta_Detalle vd ON v.VentaID = vd.VentaID
+      LEFT JOIN Productos p ON vd.ProductoID = p.ProductoID
     `;
 
-    // 1. Añadir filtro de Búsqueda de Cliente (si existe)
+    // Filtros (Igual que antes)
     if (searchCliente && typeof searchCliente === 'string') {
       params.push(`%${searchCliente}%`);
       whereClauses.push(`c.Nombre ILIKE $${params.length}`);
     }
-
-    // 2. Añadir filtro de Fecha de Inicio (si existe)
     if (fechaInicio && typeof fechaInicio === 'string') {
       params.push(fechaInicio);
-      // Compara solo la parte de la fecha (ignora la hora)
       whereClauses.push(`v.FechaHora >= $${params.length}::date`);
     }
-
-    // 3. Añadir filtro de Fecha Fin (si existe)
     if (fechaFin && typeof fechaFin === 'string') {
       params.push(fechaFin);
-      // Compara hasta el *final* del día seleccionado
       whereClauses.push(`v.FechaHora < $${params.length}::date + interval '1 day'`);
     }
 
-    // Construir la consulta final con los filtros
     if (whereClauses.length > 0) {
       query += ` WHERE ${whereClauses.join(' AND ')}`;
     }
 
-    // Ordenar por fecha, de más reciente a más antigua
-    query += ' ORDER BY v.FechaHora DESC';
+    // IMPORTANTE: Agrupar para que json_agg funcione
+    query += ' GROUP BY v.VentaID, c.Nombre, u.Nombre ORDER BY v.FechaHora DESC';
 
-    // Ejecutar la consulta
     const result = await pool.query(query, params);
     res.json(result.rows);
 
