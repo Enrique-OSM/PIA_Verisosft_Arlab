@@ -445,6 +445,8 @@ app.delete('/api/productos/:id', async (req: Request, res: Response) => {
   }
 });
 
+// --- API GESTIÓN DE USUARIOS (RU17) ---
+
 // GET /api/roles (Para llenar el select del formulario)
 app.get('/api/roles', async (req: Request, res: Response) => {
   try {
@@ -533,6 +535,68 @@ app.put('/api/usuarios/:id', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Error al actualizar usuario' });
   }
 });
+
+// --- API DE MÉTRICAS Y REPORTES (RU15) ---
+
+// GET /api/reportes/general (KPIs Globales)
+app.get('/api/reportes/general', async (req: Request, res: Response) => {
+  try {
+    // Consultamos 3 datos en paralelo
+    const ventasQ = await pool.query('SELECT COUNT(*) as cant, SUM(Total) as dinero FROM Ventas');
+    const clientesQ = await pool.query('SELECT COUNT(*) as total FROM Clientes');
+    
+    // Construimos la respuesta
+    res.json({
+      totalVentas: ventasQ.rows[0].cant || 0,
+      ingresosTotales: ventasQ.rows[0].dinero || 0,
+      totalClientes: clientesQ.rows[0].total || 0
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error en métricas generales' });
+  }
+});
+
+// GET /api/reportes/top-productos (Productos Más Vendidos)
+app.get('/api/reportes/top-productos', async (req: Request, res: Response) => {
+  try {
+    // Unimos Detalle -> Productos para ver nombres y sumamos cantidades
+    const result = await pool.query(`
+      SELECT p.Descripcion, SUM(vd.Cantidad) as CantidadVendida, SUM(vd.Cantidad * vd.PrecioUnitario) as IngresoGenerado
+      FROM Venta_Detalle vd
+      JOIN Productos p ON vd.ProductoID = p.ProductoID
+      GROUP BY p.Descripcion
+      ORDER BY CantidadVendida DESC
+      LIMIT 5
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error en top productos' });
+  }
+});
+
+// GET /api/reportes/ventas-semana (Ventas de los últimos 7 días)
+app.get('/api/reportes/ventas-semana', async (req: Request, res: Response) => {
+  try {
+    // Agrupamos por FECHA (sin hora)
+    const result = await pool.query(`
+      SELECT 
+        TO_CHAR(FechaHora, 'YYYY-MM-DD') as Fecha, 
+        COUNT(*) as CantidadVentas, 
+        SUM(Total) as TotalDinero
+      FROM Ventas
+      WHERE FechaHora >= NOW() - INTERVAL '7 days'
+      GROUP BY TO_CHAR(FechaHora, 'YYYY-MM-DD')
+      ORDER BY Fecha ASC
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error en ventas por periodo' });
+  }
+});
+
 // 5. INICIAR EL SERVIDOR
 app.listen(port, () => {
   console.log(`Servidor backend corriendo en http://localhost:${port}`);

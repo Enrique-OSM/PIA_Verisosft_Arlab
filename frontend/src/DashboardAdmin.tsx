@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { GestionProductos } from './GestionProductos'; // Importamos el componente nuevo
+import { GestionProductos } from './GestionProductos';
+import { GestionUsuarios } from './GestionUsuarios'; 
+import { MetricasReportes } from './MetricasReportes';
 
 interface DashboardProps {
   nombreUsuario: string;
@@ -17,9 +19,9 @@ export function DashboardAdmin({ nombreUsuario, onLogout }: DashboardProps) {
       case 'productos':
         return <GestionProductos />; // Aquí mostramos el componente que acabamos de crear
       case 'usuarios':
-        return <p>Módulo de Usuarios (Próximamente - RU17)</p>;
+        return <GestionUsuarios />;
       case 'metricas':
-        return <p>Módulo de Métricas (Próximamente - RU15)</p>;
+        return <MetricasReportes />;
       case 'inicio':
       default:
         return <p>Selecciona una opción del menú de administración.</p>;
