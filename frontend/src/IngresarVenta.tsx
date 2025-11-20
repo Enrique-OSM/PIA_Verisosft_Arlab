@@ -12,8 +12,8 @@ interface Cliente {
 
 interface Producto {
   productoid: number;
-  descripcion: string; // Nombre del análisis
-  precio: number; // Viene como string desde Postgres a veces, cuidado
+  descripcion: string;
+  precio: number;
   categorianombre: string;
 }
 
@@ -23,8 +23,8 @@ interface ItemCarrito {
 }
 
 interface Props {
-  usuarioId: number; // Necesitamos saber QUIÉN hace la venta
-  onVentaTerminada: () => void; // Para redirigir al terminar
+  usuarioId: number;
+  onVentaTerminada: () => void;
 }
 
 export function IngresarVenta({ usuarioId, onVentaTerminada }: Props) {
@@ -37,6 +37,9 @@ export function IngresarVenta({ usuarioId, onVentaTerminada }: Props) {
   const [productoSeleccionado, setProductoSeleccionado] = useState<number | ''>('');
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // --- CAMBIO 1: Estado para el descuento ---
+  const [descuento, setDescuento] = useState<number>(0); 
 
   // 1. Cargar Clientes y Productos al iniciar
   useEffect(() => {
@@ -60,7 +63,6 @@ export function IngresarVenta({ usuarioId, onVentaTerminada }: Props) {
     const prod = productos.find(p => p.productoid === Number(productoSeleccionado));
     if (!prod) return;
 
-    // Verificar si ya está en el carrito
     const existe = carrito.find(item => item.producto.productoid === prod.productoid);
     
     if (existe) {
@@ -68,9 +70,8 @@ export function IngresarVenta({ usuarioId, onVentaTerminada }: Props) {
       return;
     }
 
-    // Agregar nuevo item (Análisis clínicos usualmente son Cantidad: 1)
     setCarrito([...carrito, { producto: prod, cantidad: 1 }]);
-    setProductoSeleccionado(''); // Resetear selector
+    setProductoSeleccionado('');
   };
 
   // 3. Eliminar del Carrito
@@ -78,10 +79,12 @@ export function IngresarVenta({ usuarioId, onVentaTerminada }: Props) {
     setCarrito(carrito.filter(item => item.producto.productoid !== idProducto));
   };
 
-  // 4. Calcular Total
-  const totalVenta = carrito.reduce((acc, item) => {
+  // --- CAMBIO 2: Cálculo de Subtotal y Total Final ---
+  const subTotal = carrito.reduce((acc, item) => {
     return acc + (Number(item.producto.precio) * item.cantidad);
   }, 0);
+
+  const totalFinal = subTotal - descuento;
 
   // 5. Finalizar Venta (Enviar al Backend)
   const handleFinalizarVenta = async () => {
@@ -90,15 +93,22 @@ export function IngresarVenta({ usuarioId, onVentaTerminada }: Props) {
       return;
     }
 
-    if (!window.confirm(`¿Confirmar venta por un total de $${totalVenta}?`)) return;
+    // Validar que el descuento no sea mayor al total
+    if (totalFinal < 0) {
+      alert('El descuento no puede ser mayor al total de la venta.');
+      return;
+    }
+
+    if (!window.confirm(`¿Confirmar venta por un total final de $${totalFinal}?`)) return;
 
     setIsSubmitting(true);
     try {
       // Construir el payload para el backend
       const payload = {
         clienteId: Number(clienteSeleccionado),
-        usuarioId: usuarioId, // ID del recepcionista logueado
-        total: totalVenta,
+        usuarioId: usuarioId,
+        total: totalFinal, // Enviamos el total ya con descuento
+        descuento: descuento, // --- CAMBIO 3: Enviamos el descuento para registro ---
         items: carrito.map(item => ({
           productoId: item.producto.productoid,
           cantidad: item.cantidad,
@@ -106,12 +116,15 @@ export function IngresarVenta({ usuarioId, onVentaTerminada }: Props) {
         }))
       };
 
+      // (Nota: Asegúrate de que tu backend endpoint /api/ventas reciba 'descuento' en el body 
+      // y lo guarde en la columna DescuentoAplicado de la tabla Ventas)
       await axios.post(`${API_BASE_URL}/api/ventas`, payload);
       
       alert('¡Venta registrada exitosamente!');
-      setCarrito([]); // Limpiar carrito
+      setCarrito([]);
       setClienteSeleccionado('');
-      onVentaTerminada(); // Volver al menú o reporte
+      setDescuento(0); // Resetear descuento
+      onVentaTerminada();
 
     } catch (error) {
       console.error(error);
@@ -196,11 +209,30 @@ export function IngresarVenta({ usuarioId, onVentaTerminada }: Props) {
                 </tr>
               ))}
             </tbody>
+            {/* --- CAMBIO 4: Footer de Tabla con Subtotal, Descuento y Total --- */}
             <tfoot>
               <tr>
-                <td style={{ textAlign: 'right' }}><strong>TOTAL:</strong></td>
-                <td style={{ fontWeight: 'bold', fontSize: '1.2em' }}>${totalVenta}</td>
-                <td></td>
+                <td colSpan={2} style={{ textAlign: 'right' }}>Subtotal:</td>
+                <td style={{ fontWeight: 'bold' }}>${subTotal.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td colSpan={2} style={{ textAlign: 'right', color: 'green' }}>
+                   Descuento (-):
+                </td>
+                <td>
+                  <input 
+                    type="number" 
+                    min="0" 
+                    max={subTotal}
+                    value={descuento} 
+                    onChange={(e) => setDescuento(Number(e.target.value))}
+                    style={{ width: '80px', textAlign: 'right' }}
+                  />
+                </td>
+              </tr>
+              <tr style={{ fontSize: '1.2em', borderTop: '2px solid #ccc' }}>
+                <td colSpan={2} style={{ textAlign: 'right' }}><strong>TOTAL A PAGAR:</strong></td>
+                <td style={{ fontWeight: 'bold', color: '#007bff' }}>${totalFinal.toFixed(2)}</td>
               </tr>
             </tfoot>
           </table>

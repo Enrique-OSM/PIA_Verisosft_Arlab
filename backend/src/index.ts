@@ -301,7 +301,7 @@ app.get('/api/productos', async (req: Request, res: Response) => {
 
 // POST /api/ventas (CREAR VENTA - TRANSACCIÓN COMPLEJA)
 app.post('/api/ventas', async (req: Request, res: Response) => {
-  const { clienteId, usuarioId, items, total } = req.body;
+  const { clienteId, usuarioId, items, total, descuento} = req.body;
 
   // items es un array: [{ productoId: 1, cantidad: 1, precio: 150 }, ...]
 
@@ -319,9 +319,9 @@ app.post('/api/ventas', async (req: Request, res: Response) => {
     // 2. INSERTAR LA VENTA (CABECERA)
     const ventaRes = await client.query(
       `INSERT INTO Ventas (ClienteID, UsuarioID, Total, DescuentoAplicado)
-       VALUES ($1, $2, $3, 0)
+       VALUES ($1, $2, $3, $4)
        RETURNING VentaID`,
-      [clienteId, usuarioId, total]
+      [clienteId, usuarioId, total, descuento || 0]
     );
     const ventaId = ventaRes.rows[0].ventaid;
 
