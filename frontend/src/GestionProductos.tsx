@@ -48,10 +48,14 @@ export function GestionProductos() {
     }
   };
 
-  // El useEffect se encarga de recargar cada vez que escribes en searchTerm
+// Esto hace que la búsqueda sea automática al escribir
   useEffect(() => {
-    // Agregamos un pequeño "delay" opcional o simplemente llamamos directo
-    fetchData();
+    // Creamos un "debounce" para no llamar a la API por cada letra instantáneamente
+    const delayDebounceFn = setTimeout(() => {
+      fetchData();
+    }, 300); // Espera 300ms después de que dejes de escribir
+
+    return () => clearTimeout(delayDebounceFn);
   }, [searchTerm]);
 
   // 2. Manejo del Formulario (Guardar)

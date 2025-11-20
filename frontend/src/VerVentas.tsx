@@ -3,22 +3,20 @@ import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:3001';
 
-// Interface para el detalle individual (Producto, cantidad, precio)
 interface DetalleProducto {
   producto: string;
   cantidad: number;
   precio: number;
 }
 
-// Interface actualizada para la Venta
 interface VentaCompleta {
   ventaid: number;
-  fechahora: string; // Ojo: Postgres suele devolver esto como 'fechahora'
+  fechahora: string;
   clientenombre: string;
   usuarionombre: string;
   total: number;
   descuentoaplicado: number;
-  detalles: DetalleProducto[]; // <-- AÑADIDO: Array con los productos
+  detalles: DetalleProducto[];
 }
 
 export function VerVentas() {
@@ -62,18 +60,106 @@ export function VerVentas() {
     setSearchCliente('');
     setFechaInicio('');
     setFechaFin('');
-    // Opcional: llamar a fetchVentas() aquí si quieres recargar al limpiar
+    // fetchVentas(); // Descomentar si quieres recarga inmediata
   };
 
-  // Función simple para formatear fecha
   const formatFecha = (fecha: string) => {
     if (!fecha) return '';
     return new Date(fecha).toLocaleString('es-MX');
   };
 
+const imprimirTicket = (venta: VentaCompleta) => {
+    const totalNumerico = Number(venta.total);
+    const descuentoNumerico = Number(venta.descuentoaplicado);
+    const subtotal = totalNumerico + descuentoNumerico;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Ticket Venta #${venta.ventaid}</title>
+          <style>
+            body { font-family: 'Courier New', monospace; width: 80mm; font-size: 12px; margin: 0; padding: 10px; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            hr { border-top: 1px dashed black; margin: 10px 0; }
+            table { width: 100%; border-collapse: collapse; }
+            td { vertical-align: top; padding: 2px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="text-center">
+            <h3 style="margin: 0;">ARLAB</h3>
+            <p style="margin: 5px 0;">Laboratorio Clínico</p>
+            <p style="font-size: 10px;">Av. Universidad S/N, San Nicolás<br>Nuevo León, México</p>
+            <hr>
+            <div style="text-align: left;">
+              <strong>Folio:</strong> ${venta.ventaid}<br>
+              <strong>Fecha:</strong> ${formatFecha(venta.fechahora)}<br>
+              <strong>Cliente:</strong> ${venta.clientenombre}<br>
+              <strong>Atendió:</strong> ${venta.usuarionombre}
+            </div>
+            <hr>
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th align="left" style="border-bottom: 1px solid #000;">Cant. Descrip</th>
+                <th align="right" style="border-bottom: 1px solid #000;">Importe</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${venta.detalles.map(d => `
+                <tr>
+                  <td>${d.cantidad} x ${d.producto}</td>
+                  <td align="right">$${(Number(d.cantidad) * Number(d.precio)).toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <hr>
+          
+          <table>
+             <tr>
+              <td>Subtotal:</td>
+              <td align="right">$${subtotal.toFixed(2)}</td>
+            </tr>
+             <tr>
+              <td>Descuento:</td>
+              <td align="right">-$${descuentoNumerico.toFixed(2)}</td>
+            </tr>
+            <tr style="font-size: 14px; font-weight: bold;">
+              <td style="padding-top: 5px;">TOTAL:</td>
+              <td align="right" style="padding-top: 5px;">$${totalNumerico.toFixed(2)}</td>
+            </tr>
+          </table>
+
+          <br>
+          <div class="text-center">
+            <p>¡Gracias por su preferencia!</p>
+          </div>
+          
+          <script>
+            window.onload = function() { window.print(); }
+          </script>
+        </body>
+      </html>
+    `;
+
+    // CAMBIO 2: Especificar la codificación al crear el Blob
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    
+    const url = URL.createObjectURL(blob);
+    const ventana = window.open(url, '_blank', 'height=600,width=400');
+    if (!ventana) alert('Por favor permite las ventanas emergentes.');
+  };
+
   return (
     <div>
-      <h2>Módulo de Reporte de Ventas (RU03)</h2>
+      <h2>Módulo de Reporte de Ventas (RU03 y RU04)</h2>
 
       <form className="toolbar" onSubmit={handleFilterSubmit}>
         <input
@@ -97,22 +183,23 @@ export function VerVentas() {
       {isLoading && <p>Cargando...</p>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
-<table>
+      <table>
         <thead>
           <tr>
             <th>ID</th>
             <th>Fecha</th>
             <th>Cliente</th>
             <th>Vendedor</th>
-            <th>Detalles de Productos</th>
-            <th>Descuento</th> {/* <--- 1. NUEVA COLUMNA ENCABEZADO */}
+            <th>Detalles</th>
+            <th>Descuento</th>
             <th>Total</th>
+            <th>Acciones</th>
           </tr>
         </thead>
         <tbody>
           {!isLoading && ventas.length === 0 && (
             <tr>
-              <td colSpan={7}>No se encontraron ventas con esos filtros.</td>
+              <td colSpan={8}>No se encontraron ventas con esos filtros.</td>
             </tr>
           )}
           {ventas.map(venta => (
@@ -122,7 +209,6 @@ export function VerVentas() {
               <td>{venta.clientenombre}</td>
               <td>{venta.usuarionombre}</td>
               
-              {/* Lista de productos */}
               <td style={{ fontSize: '0.9em' }}>
                 <ul style={{ paddingLeft: '20px', margin: 0 }}>
                   {venta.detalles && venta.detalles.map((d, idx) => (
@@ -136,12 +222,19 @@ export function VerVentas() {
                 </ul>
               </td>
 
-              {/* <--- 2. NUEVA COLUMNA DATO (DESCUENTO) */}
               <td style={{ color: venta.descuentoaplicado > 0 ? 'green' : 'inherit' }}>
                 {venta.descuentoaplicado > 0 ? `-$${venta.descuentoaplicado}` : '$0.00'}
               </td>
               
               <td style={{ fontWeight: 'bold' }}>${venta.total}</td>
+              
+              {/* BOTÓN DE IMPRIMIR (RU04) */}
+              <td>
+                <button onClick={() => imprimirTicket(venta)}>
+                  🖨️ Imprimir
+                </button>
+              </td>
+
             </tr>
           ))}
         </tbody>

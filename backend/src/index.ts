@@ -283,21 +283,21 @@ app.get('/api/ventas', async (req: Request, res: Response) => {
 // --- API PARA INGRESAR VENTA (RU02) Y PRODUCTOS ---
 
 // GET /api/productos (Para llenar el selector de análisis)
-app.get('/api/productos', async (req: Request, res: Response) => {
-  try {
-    // Obtenemos productos con el nombre de su categoría
-    const result = await pool.query(`
-      SELECT p.*, c.Nombre as CategoriaNombre 
-      FROM Productos p
-      LEFT JOIN Categorias c ON p.CategoriaID = c.CategoriaID
-      ORDER BY p.Descripcion ASC
-    `);
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error al obtener productos:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-});
+// app.get('/api/productos', async (req: Request, res: Response) => {
+//   try {
+//     // Obtenemos productos con el nombre de su categoría
+//     const result = await pool.query(`
+//       SELECT p.*, c.Nombre as CategoriaNombre 
+//       FROM Productos p
+//       LEFT JOIN Categorias c ON p.CategoriaID = c.CategoriaID
+//       ORDER BY p.Descripcion ASC
+//     `);
+//     res.json(result.rows);
+//   } catch (error) {
+//     console.error('Error al obtener productos:', error);
+//     res.status(500).json({ error: 'Error interno del servidor' });
+//   }
+// });
 
 // POST /api/ventas (CREAR VENTA - TRANSACCIÓN COMPLEJA)
 app.post('/api/ventas', async (req: Request, res: Response) => {
@@ -365,6 +365,12 @@ app.get('/api/categorias', async (req: Request, res: Response) => {
 // (Nota: Reemplaza el anterior si ya lo tenías, este incluye búsqueda)
 app.get('/api/productos', async (req: Request, res: Response) => {
   const { search } = req.query;
+
+  // --- DEBUG: Esto imprimirá en tu terminal del backend lo que escribas ---
+  console.log("--- API PRODUCTOS ---");
+  console.log("Buscando:", search); 
+  // ---------------------------------------------------------------------
+
   try {
     let query = `
       SELECT p.*, c.Nombre as CategoriaNombre 
@@ -373,17 +379,19 @@ app.get('/api/productos', async (req: Request, res: Response) => {
     `;
     const params = [];
 
-    if (search && typeof search === 'string') {
-      // CAMBIO: Ahora solo filtramos por p.Codigo usando ILIKE (insensible a mayúsculas)
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      // AQUÍ ESTÁ LA CLAVE: SOLO BUSCAMOS EN p.Codigo
+      // Usamos ILIKE para que no importen mayúsculas/minúsculas
       query += ` WHERE p.Codigo ILIKE $1`;
       params.push(`%${search}%`);
     }
 
-    // Ordenamos por Código para que sea más fácil encontrarlo
+    // Ordenar
     query += ` ORDER BY p.Codigo ASC`;
 
     const result = await pool.query(query, params);
     res.json(result.rows);
+    
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error interno' });
