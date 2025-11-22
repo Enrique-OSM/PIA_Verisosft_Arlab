@@ -197,11 +197,17 @@ const imprimirTicket = (venta: VentaCompleta) => {
           </tr>
         </thead>
         <tbody>
-          {!isLoading && ventas.length === 0 && (
+
+          {fechaInicio > fechaFin && (
+            <tr>
+              <td colSpan={8}>La fecha final no puede ser menor a la fecha de inicio</td>
+            </tr>
+          )}
+            {/* {!isLoading && ventas.length === 0 && (
             <tr>
               <td colSpan={8}>No se encontraron ventas con esos filtros.</td>
             </tr>
-          )}
+          )} */}
           {ventas.map(venta => (
             <tr key={venta.ventaid}>
               <td>{venta.ventaid}</td>
